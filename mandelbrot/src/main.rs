@@ -1,21 +1,64 @@
+extern crate image;
 extern crate num;
-use num::Complex;
 
+use image::codecs::png::PngEncoder;
+use image::{ColorType, ImageEncoder};
+use num::Complex;
+use std::fs::File;
+use std::io::Write;
 use std::str::FromStr;
 
 fn main() {
-    println!("Hello, world!");
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() != 5 {
+        writeln!(
+            std::io::stderr(),
+            "Usage: Mandelbrot NOMFIC PIXELS SUPGA INFER"
+        )
+        .unwrap();
+        writeln!(
+            std::io::stderr(),
+            "Exemple: {} mandel.png 1000x750 -1.20,0.35 -1,0.20",
+            args[0]
+        )
+        .unwrap();
+        std::process::exit(1);
+    }
+
+    let bords = analy_paire(&args[2], 'x').expect("Erreur d'analyse de la dimension des bords…");
+    let super_ga = analy_complex(&args[3]).expect("Erreur analyse de point super gauche");
+    let super_dr = analy_complex(&args[4]).expect("Erreur analyse de point super droit");
+
+    let mut pixels = vec![0; bords.0 * bords.1];
+    render(&mut pixels, bords, super_ga, super_dr);
+    ecrire_image(&args[1], &pixels, bords).expect("Erreur d'écriture du fichier png");
 }
 
-fn render(pixels: &mut [u8], bords: (usize, usize), super_ga: Complex<f64>, infer_dr: Complex<f64>) {
-    assert!(pixels.len() == bords.0 * bords.1)
+fn ecrire_image(nomfic: &str, pixel: &[u8], bords: (usize, usize)) -> Result<(), std::io::Error> {
+    let out = File::create(nomfic)?;
+    let encodeur = PngEncoder::new(out);
+    encodeur
+        .write_image(pixel, bords.0 as u32, bords.1 as u32, ColorType::L8)
+        .expect("Error while write file");
+
+    Ok(())
+}
+
+fn render(
+    pixels: &mut [u8],
+    bords: (usize, usize),
+    super_ga: Complex<f64>,
+    infer_dr: Complex<f64>,
+) {
+    assert!(pixels.len() == bords.0 * bords.1);
 
     for lig in 0..bords.1 {
         for col in 0..bords.0 {
             let point = pixel_en_point(bords, (col, lig), super_ga, infer_dr);
             pixels[lig * bords.0 + col] = match escape_time(point, 255) {
                 None => 0,
-                Some(count) => 255 - count as u8
+                Some(count) => 255 - count as u8,
             };
         }
     }
